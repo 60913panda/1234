@@ -1,0 +1,415 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Trash2, Edit2, Save, X, Search, GraduationCap, Calculator, Users, TrendingUp } from 'lucide-react';
+
+// 定義學生資料介面
+interface Student {
+  id: string;
+  name: string;
+  studentId: string; // 學號
+  chinese: number;
+  math: number;
+  english: number;
+  science: number;
+}
+
+// 初始範例資料
+const initialData: Student[] = [
+  { id: '1', name: '王小明', studentId: 'S001', chinese: 85, math: 92, english: 78, science: 88 },
+  { id: '2', name: '李美華', studentId: 'S002', chinese: 95, math: 88, english: 92, science: 90 },
+  { id: '3', name: '陳大文', studentId: 'S003', chinese: 60, math: 55, english: 65, science: 70 },
+];
+
+export default function StudentGradeManager() {
+  // 狀態管理
+  const [students, setStudents] = useState<Student[]>(() => {
+    // 嘗試從 localStorage 讀取資料
+    const saved = localStorage.getItem('grade_system_data');
+    return saved ? JSON.parse(saved) : initialData;
+  });
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // 表單狀態
+  const [formData, setFormData] = useState<Omit<Student, 'id'>>({
+    name: '',
+    studentId: '',
+    chinese: 0,
+    math: 0,
+    english: 0,
+    science: 0,
+  });
+
+  // 當 students 變動時，儲存到 localStorage
+  useEffect(() => {
+    localStorage.setItem('grade_system_data', JSON.stringify(students));
+  }, [students]);
+
+  // 計算邏輯
+  const stats = useMemo(() => {
+    if (students.length === 0) return { avg: 0, max: 0, min: 0, count: 0 };
+    
+    const totals = students.map(s => (s.chinese + s.math + s.english + s.science) / 4);
+    const classTotalAvg = totals.reduce((a, b) => a + b, 0) / students.length;
+    const maxScore = Math.max(...totals);
+    const minScore = Math.min(...totals);
+
+    return {
+      avg: classTotalAvg.toFixed(1),
+      max: maxScore.toFixed(1),
+      min: minScore.toFixed(1),
+      count: students.length
+    };
+  }, [students]);
+
+  // 過濾搜尋
+  const filteredStudents = students.filter(s => 
+    s.name.includes(searchTerm) || s.studentId.includes(searchTerm)
+  );
+
+  // 處理表單變更
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: name === 'name' || name === 'studentId' ? value : Number(value)
+    }));
+  };
+
+  // 開啟新增/編輯視窗
+  const openModal = (student?: Student) => {
+    if (student) {
+      setEditingId(student.id);
+      setFormData({
+        name: student.name,
+        studentId: student.studentId,
+        chinese: student.chinese,
+        math: student.math,
+        english: student.english,
+        science: student.science
+      });
+    } else {
+      setEditingId(null);
+      setFormData({
+        name: '',
+        studentId: '',
+        chinese: 0,
+        math: 0,
+        english: 0,
+        science: 0
+      });
+    }
+    setIsModalOpen(true);
+  };
+
+  // 提交表單
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // 基本驗證
+    if (!formData.name || !formData.studentId) {
+      alert('請輸入姓名和學號');
+      return;
+    }
+
+    if (editingId) {
+      // 更新
+      setStudents(prev => prev.map(s => 
+        s.id === editingId ? { ...formData, id: editingId } : s
+      ));
+    } else {
+      // 新增
+      const newStudent: Student = {
+        ...formData,
+        id: crypto.randomUUID()
+      };
+      setStudents(prev => [...prev, newStudent]);
+    }
+    setIsModalOpen(false);
+  };
+
+  // 刪除學生
+  const handleDelete = (id: string) => {
+    if (window.confirm('確定要刪除這位學生的資料嗎？')) {
+      setStudents(prev => prev.filter(s => s.id !== id));
+    }
+  };
+
+  // 根據分數回傳顏色 Class
+  const getScoreColor = (score: number) => {
+    if (score >= 90) return 'text-green-600 font-bold';
+    if (score < 60) return 'text-red-500 font-bold';
+    return 'text-gray-700';
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans">
+      <div className="max-w-6xl mx-auto">
+        
+        {/* Header */}
+        <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
+              <GraduationCap className="w-8 h-8 text-blue-600" />
+              學生成績管理系統
+            </h1>
+            <p className="text-gray-500 mt-1">輕鬆管理班級成績與統計數據</p>
+          </div>
+          <button 
+            onClick={() => openModal()}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            新增學生
+          </button>
+        </header>
+
+        {/* 統計卡片 */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="p-3 bg-blue-100 rounded-full text-blue-600">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">學生總數</p>
+              <p className="text-2xl font-bold text-gray-800">{stats.count} 人</p>
+            </div>
+          </div>
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="p-3 bg-indigo-100 rounded-full text-indigo-600">
+              <Calculator className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">全班平均</p>
+              <p className="text-2xl font-bold text-gray-800">{stats.avg} 分</p>
+            </div>
+          </div>
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="p-3 bg-green-100 rounded-full text-green-600">
+              <TrendingUp className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">最高平均</p>
+              <p className="text-2xl font-bold text-green-600">{stats.max} 分</p>
+            </div>
+          </div>
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="p-3 bg-amber-100 rounded-full text-amber-600">
+              <TrendingUp className="w-6 h-6 rotate-180" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">最低平均</p>
+              <p className="text-2xl font-bold text-amber-600">{stats.min} 分</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 主要內容區 */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          {/* 工具列 */}
+          <div className="p-4 border-b border-gray-100 flex items-center gap-4 bg-gray-50/50">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="搜尋姓名或學號..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              />
+            </div>
+          </div>
+
+          {/* 表格 */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50 text-gray-600 text-sm uppercase tracking-wider">
+                  <th className="p-4 font-semibold">學號</th>
+                  <th className="p-4 font-semibold">姓名</th>
+                  <th className="p-4 font-semibold text-center">國文</th>
+                  <th className="p-4 font-semibold text-center">數學</th>
+                  <th className="p-4 font-semibold text-center">英文</th>
+                  <th className="p-4 font-semibold text-center">自然</th>
+                  <th className="p-4 font-semibold text-center">總分</th>
+                  <th className="p-4 font-semibold text-center">平均</th>
+                  <th className="p-4 font-semibold text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredStudents.length > 0 ? (
+                  filteredStudents.map((student) => {
+                    const total = student.chinese + student.math + student.english + student.science;
+                    const average = total / 4;
+                    
+                    return (
+                      <tr key={student.id} className="hover:bg-blue-50/30 transition-colors">
+                        <td className="p-4 text-gray-600 font-mono text-sm">{student.studentId}</td>
+                        <td className="p-4 font-medium text-gray-900">{student.name}</td>
+                        <td className={`p-4 text-center ${getScoreColor(student.chinese)}`}>{student.chinese}</td>
+                        <td className={`p-4 text-center ${getScoreColor(student.math)}`}>{student.math}</td>
+                        <td className={`p-4 text-center ${getScoreColor(student.english)}`}>{student.english}</td>
+                        <td className={`p-4 text-center ${getScoreColor(student.science)}`}>{student.science}</td>
+                        <td className="p-4 text-center font-semibold text-gray-700">{total}</td>
+                        <td className="p-4 text-center">
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            average >= 60 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {average.toFixed(1)}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button 
+                              onClick={() => openModal(student)}
+                              className="p-1.5 hover:bg-gray-100 rounded text-gray-600 hover:text-blue-600 transition-colors"
+                              title="編輯"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleDelete(student.id)}
+                              className="p-1.5 hover:bg-red-50 rounded text-gray-600 hover:text-red-500 transition-colors"
+                              title="刪除"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={9} className="p-8 text-center text-gray-500">
+                      沒有找到符合的學生資料，請嘗試其他關鍵字或新增學生。
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* 新增/編輯 Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-fade-in-up">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50">
+              <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                {editingId ? <Edit2 className="w-5 h-5 text-blue-600" /> : <Plus className="w-5 h-5 text-blue-600" />}
+                {editingId ? '編輯學生資料' : '新增學生資料'}
+              </h2>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSubmit} className="p-6">
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">學號</label>
+                  <input
+                    type="text"
+                    name="studentId"
+                    value={formData.studentId}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    placeholder="例如: S001"
+                    required
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">姓名</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    placeholder="輸入姓名"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="mb-2 text-sm font-semibold text-gray-500 uppercase tracking-wide">科目分數 (0-100)</div>
+              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">國文</label>
+                  <input
+                    type="number"
+                    name="chinese"
+                    min="0"
+                    max="100"
+                    value={formData.chinese}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">數學</label>
+                  <input
+                    type="number"
+                    name="math"
+                    min="0"
+                    max="100"
+                    value={formData.math}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">英文</label>
+                  <input
+                    type="number"
+                    name="english"
+                    min="0"
+                    max="100"
+                    value={formData.english}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">自然</label>
+                  <input
+                    type="number"
+                    name="science"
+                    min="0"
+                    max="100"
+                    value={formData.science}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-8">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm flex items-center justify-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  儲存資料
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
